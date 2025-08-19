@@ -1,3 +1,4 @@
+import { reactive, effect } from "./reactivity/src";
 import { patchProps, createElement, createText, setElementText, insert } from "./runtime-dom"
 import { getLIS } from "./util";
 interface IcreateRendereProps {
@@ -258,6 +259,69 @@ function createRenderer(options: IcreateRendereProps) {
         patchChildren(n1, n2, el)
     }
 
+    /**
+     * 
+     * @param n2 
+     * @param container 01 
+     * const MyComponent = {
+02   // 组件名称，可选
+03   name: 'MyComponent',
+04   // 组件的渲染函数，其返回值必须为虚拟 DOM
+05   render() {
+06     // 返回虚拟 DOM
+07     return {
+08       type: 'div',
+09       children: `我是文本内容`
+10     }
+    data(){
+       return {
+         foo:'hello world' 
+       }
+    }
+11   }
+12 }
+     * @param anchor 
+     */
+
+    function mountComponent(vnode, container, anchor) {
+        const componentOptions = vnode.type
+        const { render, data, beforeCreate,
+            created, beforeMount, mounted,
+            beforeUpdate, updated } = componentOptions
+        beforeCreate && beforeCreate()
+        const state = reactive(data())
+        const instance = {
+            state,
+            isMounted: false,
+            subTree: null
+        }
+        created && created(state)
+        vnode.component = instance
+        effect(() => {
+            const subTree = render.call(state, state)
+            if (!instance.isMounted) {
+                beforeMount && beforeMount.call(state)
+                patch(null, subTree, container, anchor)
+                instance.isMounted = true
+                mounted && mounted.call(state)
+            } else {
+                beforeUpdate && beforeUpdate.call(state)
+                patch(instance.subTree, subTree, container, anchor)
+                updated && updated.call(state)
+            }
+            instance.subTree = subTree
+        }, {
+            scheduler(fn) {
+                queueJob(fn)
+            }
+        })
+    }
+
+    function patchComponent(n1, n2, anchor) {
+
+    }
+
+
     function unmount(node: VNode) {
 
         const parent = node?.el?.parentNode;
@@ -301,6 +365,12 @@ function createRenderer(options: IcreateRendereProps) {
                 n2.children.forEach((c) => patch(null, c, container))
             } else {
                 patchChildren(n1, n2, container)
+            }
+        } else if (typeof type === 'object') {
+            if (!n1) {
+                mountComponent(n2, container, anchor)
+            } else {
+                patchComponent(n1, n2, anchor)
             }
         }
 
